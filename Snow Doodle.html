@@ -1,0 +1,622 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Snow Doodle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400&display=swap" rel="stylesheet">
+<style>
+/* Layout: one full-bleed snow canvas, a falling-flake layer above it, and a small frosted toolbar pinned bottom-right. */
+:root {
+  --bg: #f6f9fd;
+  --ui-bg: rgba(255,255,255,.58);
+  --ui-fg: #6f7f93;
+  --ui-line: rgba(120,135,155,.26);
+  --ui-on: rgba(255,255,255,.95);
+  --ui-ring: rgba(111,127,147,.55);
+  --font: 'Prompt', 'Noto Sans Thai', system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ui-fg);
+  font-family: var(--font);
+  overflow: hidden;
+  transition: background .8s ease;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+#snow, #fx { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+#snow { touch-action: none; cursor: crosshair; }
+#fx { pointer-events: none; }
+
+#hint {
+  position: fixed; left: 0; right: 0; top: 46%;
+  text-align: center; font-weight: 300; font-size: 15px; letter-spacing: .08em;
+  color: var(--ui-fg); opacity: .7; pointer-events: none;
+  transition: opacity 1.2s ease;
+  padding: 0 24px;
+}
+#hint.gone { opacity: 0; }
+
+#bar {
+  position: fixed;
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 28px - env(safe-area-inset-right, 0px) - env(safe-area-inset-left, 0px));
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+}
+.grp {
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px; border-radius: 999px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-line);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: opacity .3s ease, background .8s ease;
+}
+.grp.dim { opacity: .42; }
+.btn {
+  appearance: none; -webkit-appearance: none; border: 0; margin: 0; padding: 0;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: transparent; color: var(--ui-fg);
+  transition: background .25s ease, transform .2s ease;
+}
+.btn:hover { background: var(--ui-on); }
+.btn:active { transform: scale(.92); }
+.btn[aria-pressed="true"] { background: var(--ui-on); box-shadow: 0 0 0 1px var(--ui-ring) inset; }
+.btn:focus-visible { outline: 2px solid var(--ui-ring); outline-offset: 2px; }
+.btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.btn svg .f { fill: currentColor; stroke: none; }
+.dot i { display: block; width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(110,125,145,.35); }
+.dot[data-theme="white"] i { background: #fbfdff; }
+.dot[data-theme="vanilla"] i { background: #f6e9c8; }
+.dot[data-theme="mist"] i { background: #c9d7e8; }
+.sz i { display: block; border-radius: 50%; background: currentColor; }
+@media (prefers-reduced-motion: reduce) { body, .grp, .btn { transition: none; } }
+</style>
+
+<canvas id="snow" aria-label="พื้นหิมะสำหรับวาดและประทับตรา"></canvas>
+<canvas id="fx"></canvas>
+<div id="hint">ลากนิ้วหรือเมาส์บนหิมะ เพื่อเริ่มวาด</div>
+
+<div id="bar" role="toolbar" aria-label="เครื่องมือ">
+  <div class="grp" id="gTheme">
+    <button class="btn dot" data-theme="white" aria-label="โทนขาวหิมะ" title="ขาวหิมะ" aria-pressed="true"><i></i></button>
+    <button class="btn dot" data-theme="vanilla" aria-label="โทนครีมวานิลลา" title="ครีมวานิลลา" aria-pressed="false"><i></i></button>
+    <button class="btn dot" data-theme="mist" aria-label="โทนเทาฟ้าหมอก" title="เทาฟ้าหมอก" aria-pressed="false"><i></i></button>
+  </div>
+  <div class="grp" id="gTool">
+    <button class="btn" data-tool="brush" aria-label="วาดเส้น" title="วาดเส้น" aria-pressed="true">
+      <svg viewBox="0 0 24 24"><path d="M4 17c3-9 6 3 9-3s4-4 7-8"/></svg>
+    </button>
+    <button class="btn" data-tool="paw" aria-label="ปั๊มรอยเท้าสัตว์" title="รอยเท้าสัตว์" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><ellipse class="f" cx="12" cy="16" rx="4.6" ry="3.8"/><ellipse class="f" cx="5.6" cy="11" rx="1.7" ry="2.3"/><ellipse class="f" cx="9.4" cy="6.6" rx="1.7" ry="2.4"/><ellipse class="f" cx="14.6" cy="6.6" rx="1.7" ry="2.4"/><ellipse class="f" cx="18.4" cy="11" rx="1.7" ry="2.3"/></svg>
+    </button>
+    <button class="btn" data-tool="snowman" aria-label="ปั๊มสโนว์แมน" title="สโนว์แมน" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="17" r="5"/><circle cx="12" cy="9.5" r="3.4"/><circle class="f" cx="10.9" cy="9" r=".55"/><circle class="f" cx="13.1" cy="9" r=".55"/></svg>
+    </button>
+  </div>
+  <div class="grp" id="gSize">
+    <button class="btn sz" data-size="s" aria-label="ปลายเล็ก" title="เล็ก" aria-pressed="false"><i style="width:5px;height:5px"></i></button>
+    <button class="btn sz" data-size="m" aria-label="ปลายกลาง" title="กลาง" aria-pressed="true"><i style="width:9px;height:9px"></i></button>
+    <button class="btn sz" data-size="l" aria-label="ปลายใหญ่" title="ใหญ่" aria-pressed="false"><i style="width:14px;height:14px"></i></button>
+  </div>
+  <div class="grp" id="gAct">
+    <button class="btn" id="bReset" aria-label="ล้างหน้าจอ" title="ล้างด้วยหิมะตกใหม่">
+      <svg viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/><path d="M9.6 4.6 12 6.6l2.4-2M9.6 19.4l2.4-2 2.4 2"/></svg>
+    </button>
+    <button class="btn" id="bMute" aria-label="ปิดเสียง" title="เปิด/ปิดเสียง" aria-pressed="false">
+      <svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path id="waves" d="M15.5 9.2a4 4 0 0 1 0 5.6M18 7a7.2 7.2 0 0 1 0 10"/><path id="slash" d="M16 9.5l5 5M21 9.5l-5 5" style="display:none"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var cv = $('snow'), ctx = cv.getContext('2d', { alpha: false });
+var fx = $('fx'), fctx = fx.getContext('2d');
+
+/* ---------- themes ---------- */
+var THEMES = {
+  white:   { base: [249, 251, 254], shadow: [146, 158, 176], bg: '#f6f9fd', ui: '#6f7f93', uiBg: 'rgba(255,255,255,.58)', on: 'rgba(255,255,255,.95)' },
+  vanilla: { base: [251, 244, 227], shadow: [172, 156, 134], bg: '#fbf4e3', ui: '#8a7860', uiBg: 'rgba(255,250,236,.58)', on: 'rgba(255,251,240,.95)' },
+  mist:    { base: [213, 223, 236], shadow: [108, 124, 148], bg: '#d5dfec', ui: '#56677f', uiBg: 'rgba(232,239,247,.55)', on: 'rgba(240,245,251,.92)' }
+};
+var curBase = THEMES.white.base.slice(), curShadow = THEMES.white.shadow.slice();
+var themeAnim = null;
+
+/* ---------- snow field ---------- */
+var D = 70, RM = 24;               // carve depth, rim height (grid px units)
+var cssW = 0, cssH = 0, W = 0, H = 0, g = 1;
+var C, R, H0, T, grain, img;
+var dirty = null, fullDirty = false;
+
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function sstep(a, b, x) { var t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+
+function addNoise(arr, w, h, cell, amp, seed) {
+  var rand = rng(seed), gw = Math.ceil(w / cell) + 3, gh = Math.ceil(h / cell) + 3, grid = new Float32Array(gw * gh);
+  for (var i = 0; i < grid.length; i++) grid[i] = rand() * 2 - 1;
+  for (var y = 0; y < h; y++) {
+    var fy = y / cell, iy = fy | 0, ty = fy - iy; ty = ty * ty * (3 - 2 * ty);
+    for (var x = 0; x < w; x++) {
+      var fx_ = x / cell, ix = fx_ | 0, tx = fx_ - ix; tx = tx * tx * (3 - 2 * tx);
+      var a = grid[iy * gw + ix], b = grid[iy * gw + ix + 1], c = grid[(iy + 1) * gw + ix], d = grid[(iy + 1) * gw + ix + 1];
+      arr[y * w + x] += amp * ((a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty);
+    }
+  }
+}
+
+function resample(old, ow, oh, nw, nh) {
+  var out = new Float32Array(nw * nh);
+  if (!old || !ow) return out;
+  for (var y = 0; y < nh; y++) {
+    var sy = Math.min(oh - 1, (y * oh / nh) | 0);
+    for (var x = 0; x < nw; x++) out[y * nw + x] = old[sy * ow + Math.min(ow - 1, (x * ow / nw) | 0)];
+  }
+  return out;
+}
+
+function resize() {
+  var nw = Math.max(1, window.innerWidth), nh = Math.max(1, window.innerHeight);
+  var ng = Math.min(1, 1100 / Math.max(nw, nh));
+  var gW = Math.max(2, Math.round(nw * ng)), gH = Math.max(2, Math.round(nh * ng));
+  if (gW === W && gH === H) { cssW = nw; cssH = nh; return; }
+  var oC = C, oR = R, ow = W, oh = H;
+  cssW = nw; cssH = nh; g = gW / nw; W = gW; H = gH;
+  cv.width = W; cv.height = H;
+  C = resample(oC, ow, oh, W, H); R = resample(oR, ow, oh, W, H);
+  H0 = new Float32Array(W * H);
+  addNoise(H0, W, H, 150, 34, 11); addNoise(H0, W, H, 54, 12, 23); addNoise(H0, W, H, 18, 1.4, 37);
+  T = new Float32Array(W * H);
+  grain = new Int8Array(W * H);
+  var rr = rng(99);
+  for (var i = 0; i < grain.length; i++) grain[i] = ((rr() - .5) * 3.2) | 0;
+  img = ctx.createImageData(W, H);
+  recompute(0, 0, W - 1, H - 1);
+  fullDirty = true;
+  fx.width = nw; fx.height = nh;
+  initFlakes();
+}
+
+function recompute(x0, y0, x1, y1) {
+  for (var y = y0; y <= y1; y++) {
+    var row = y * W;
+    for (var x = x0; x <= x1; x++) { var i = row + x; T[i] = H0[i] - D * C[i] + RM * R[i]; }
+  }
+}
+
+function markDirty(x0, y0, x1, y1) {
+  x0 = Math.max(0, x0 | 0); y0 = Math.max(0, y0 | 0); x1 = Math.min(W - 1, Math.ceil(x1)); y1 = Math.min(H - 1, Math.ceil(y1));
+  if (x1 < x0 || y1 < y0) return;
+  if (!dirty) dirty = { x0: x0, y0: y0, x1: x1, y1: y1 };
+  else { dirty.x0 = Math.min(dirty.x0, x0); dirty.y0 = Math.min(dirty.y0, y0); dirty.x1 = Math.max(dirty.x1, x1); dirty.y1 = Math.max(dirty.y1, y1); }
+}
+
+function render(x0, y0, x1, y1) {
+  var d = img.data, b0 = curBase[0], b1 = curBase[1], b2 = curBase[2], s0 = curShadow[0], s1 = curShadow[1], s2 = curShadow[2];
+  var w255 = 255;
+  for (var y = y0; y <= y1; y++) {
+    var dyv = y / H - .5;
+    for (var x = x0; x <= x1; x++) {
+      var i = y * W + x;
+      var xl = x > 0 ? i - 1 : i, xr = x < W - 1 ? i + 1 : i, yu = y > 0 ? i - W : i, yd = y < H - 1 ? i + W : i;
+      var gx = (T[xr] - T[xl]) * .5, gy = (T[yd] - T[yu]) * .5;
+      var s = (.65 * gx + .75 * gy) * .1;
+      if (s > 1) s = 1; else if (s < -1) s = -1;
+      var cav = C[i]; if (cav > 1) cav = 1;
+      var dxv = x / W - .5;
+      var k = (s < 0 ? -s * .95 : 0) + cav * .8 + (dxv * dxv + dyv * dyv) * .26;
+      if (k > 1) k = 1;
+      var l = s > 0 ? s * .85 : 0;
+      var gr = grain[i], p = i * 4;
+      d[p]     = b0 + (s0 - b0) * k + (w255 - b0) * l + gr;
+      d[p + 1] = b1 + (s1 - b1) * k + (w255 - b1) * l + gr;
+      d[p + 2] = b2 + (s2 - b2) * k + (w255 - b2) * l + gr;
+      d[p + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+}
+
+/* ---------- carving ---------- */
+function dab(cx, cy, r) {
+  var ext = r * 2.7;
+  var x0 = Math.max(0, Math.floor(cx - ext)), x1 = Math.min(W - 1, Math.ceil(cx + ext));
+  var y0 = Math.max(0, Math.floor(cy - ext)), y1 = Math.min(H - 1, Math.ceil(cy + ext));
+  for (var y = y0; y <= y1; y++) {
+    for (var x = x0; x <= x1; x++) {
+      var dd = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / r;
+      if (dd > 2.6) continue;
+      var i = y * W + x;
+      var f = Math.exp(-dd * dd * 1.7);
+      var bm = 1 - Math.abs(dd - 1.75) / .85; if (bm < 0) bm = 0; bm = bm * bm * (3 - 2 * bm);
+      var nC = C[i] > f ? C[i] : f;
+      var nr = R[i] * (1 - f), rb = bm * (1 - nC);
+      R[i] = nr > rb ? nr : rb;
+      C[i] = nC;
+    }
+  }
+  recompute(x0, y0, x1, y1);
+  markDirty(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
+}
+
+
+function boxBlur(src, w, h, rad, passes) {
+  var a = Float32Array.from(src), b = new Float32Array(w * h);
+  rad = Math.max(1, Math.round(rad));
+  var win = rad * 2 + 1, y, x, sum, p;
+  for (p = 0; p < passes; p++) {
+    for (y = 0; y < h; y++) {
+      sum = 0;
+      for (x = -rad; x <= rad; x++) sum += a[y * w + Math.min(w - 1, Math.max(0, x))];
+      for (x = 0; x < w; x++) {
+        b[y * w + x] = sum / win;
+        sum += a[y * w + Math.min(w - 1, x + rad + 1)] - a[y * w + Math.max(0, x - rad)];
+      }
+    }
+    for (x = 0; x < w; x++) {
+      sum = 0;
+      for (y = -rad; y <= rad; y++) sum += b[Math.min(h - 1, Math.max(0, y)) * w + x];
+      for (y = 0; y < h; y++) {
+        a[y * w + x] = sum / win;
+        sum += b[Math.min(h - 1, y + rad + 1) * w + x] - b[Math.max(0, y - rad) * w + x];
+      }
+    }
+  }
+  return a;
+}
+
+/* ---------- stamp shapes (unit: 1 = S/100) ---------- */
+function ell(c, x, y, rx, ry, rot) { c.beginPath(); c.ellipse(x, y, rx, ry, rot || 0, 0, Math.PI * 2); c.fill(); }
+function circ(c, x, y, r) { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); }
+
+var PAW = [{ k: 1, draw: function (c) {
+  ell(c, 0, 17, 26, 20); ell(c, -15, 12, 14, 12); ell(c, 15, 12, 14, 12);
+  ell(c, -32, -6, 9.5, 13, -.4); ell(c, -11, -26, 9.5, 13.5, -.1);
+  ell(c, 11, -26, 9.5, 13.5, .1); ell(c, 32, -6, 9.5, 13, .4);
+} }];
+
+var SNOWMAN = [
+  { k: .8, draw: function (c) {
+    circ(c, 0, 33, 29); circ(c, 0, -5, 21); circ(c, 0, -34, 15);
+    c.lineWidth = 3.2; c.lineCap = 'round'; c.strokeStyle = '#fff';
+    c.beginPath(); c.moveTo(-18, -10); c.lineTo(-38, -24); c.moveTo(18, -10); c.lineTo(38, -22); c.stroke();
+  } },
+  { k: .85, draw: function (c) {
+    ell(c, 0, -46, 20, 4.2); c.fillRect(-11, -66, 22, 20);
+  } },
+  { k: 1, draw: function (c) {
+    circ(c, -5.5, -37, 2.3); circ(c, 5.5, -37, 2.3);
+    ell(c, 0, -31, 6.5, 2.2, .1);
+    circ(c, -7, -26.5, 1.3); circ(c, -3.4, -24.6, 1.3); circ(c, 3.4, -24.6, 1.3); circ(c, 7, -26.5, 1.3);
+    circ(c, 0, -10, 2.8); circ(c, 0, -1, 2.8); circ(c, 0, 8, 2.8);
+    c.fillRect(-12, -50, 24, 4);
+  } }
+];
+
+var maskCv = document.createElement('canvas');
+function stamp(shape, cx, cy, S, angle) {
+  var Sc = Math.ceil(S * 2.4);
+  if (Sc < 8) return;
+  maskCv.width = Sc; maskCv.height = Sc;
+  var mc = maskCv.getContext('2d', { willReadFrequently: true });
+  var u = S / 100, M = new Float32Array(Sc * Sc);
+  for (var li = 0; li < shape.length; li++) {
+    mc.setTransform(1, 0, 0, 1, 0, 0);
+    mc.clearRect(0, 0, Sc, Sc);
+    mc.setTransform(u, 0, 0, u, Sc / 2, Sc / 2);
+    mc.rotate(angle);
+    mc.fillStyle = '#fff';
+    shape[li].draw(mc);
+    var px = mc.getImageData(0, 0, Sc, Sc).data, k = shape[li].k;
+    for (var i = 0; i < M.length; i++) { var v = px[i * 4 + 3] / 255 * k; if (v > M[i]) M[i] = v; }
+  }
+  var Mb = boxBlur(M, Sc, Sc, S * .016 + 1, 2);
+  var Mo = boxBlur(M, Sc, Sc, S * .08 + 2, 2);
+  var Mw = boxBlur(M, Sc, Sc, S * .13 + 2, 2);
+  var ox = Math.round(cx - Sc / 2), oy = Math.round(cy - Sc / 2);
+  for (var y = 0; y < Sc; y++) {
+    var gy = oy + y; if (gy < 0 || gy >= H) continue;
+    for (var x = 0; x < Sc; x++) {
+      var gx = ox + x; if (gx < 0 || gx >= W) continue;
+      var m = Mb[y * Sc + x], j = gy * W + gx;
+      var bowl = Mo[y * Sc + x] * 2; if (bowl > 1) bowl = 1; bowl *= .3;
+      if (bowl > m) m = bowl;
+      var ring = (Mw[y * Sc + x] - m * 1.15) * 3; if (ring < 0) ring = 0; if (ring > 1) ring = 1;
+      var nC = C[j] > m ? C[j] : m;
+      var nr = R[j] * (1 - m), rb = ring * (1 - nC);
+      R[j] = nr > rb ? nr : rb;
+      C[j] = nC;
+    }
+  }
+  var x0 = Math.max(0, ox), y0 = Math.max(0, oy), x1 = Math.min(W - 1, ox + Sc), y1 = Math.min(H - 1, oy + Sc);
+  recompute(x0, y0, x1, y1);
+  markDirty(x0 - 1, y0 - 1, x1 + 1, y1 + 1);
+}
+
+/* ---------- falling flakes + dust ---------- */
+var sprite = document.createElement('canvas');
+sprite.width = sprite.height = 32;
+(function () {
+  var c = sprite.getContext('2d'), gr = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.42, 'rgba(255,255,255,.95)');
+  gr.addColorStop(.68, 'rgba(150,166,190,.2)'); gr.addColorStop(1, 'rgba(150,166,190,0)');
+  c.fillStyle = gr; c.fillRect(0, 0, 32, 32);
+})();
+var flakes = [], dust = [], heavy = 0;
+function newFlake(top) {
+  return { x: Math.random() * cssW, y: top ? -10 - Math.random() * 40 : Math.random() * cssH,
+    r: 1.6 + Math.random() * 3.2, vy: 9 + Math.random() * 16, ph: Math.random() * 6.28, sw: 8 + Math.random() * 16, a: .55 + Math.random() * .4, tmp: false };
+}
+function initFlakes() {
+  var n = Math.min(110, Math.max(35, Math.round(cssW * cssH / 10000)));
+  flakes = [];
+  for (var i = 0; i < n; i++) flakes.push(newFlake(false));
+}
+function puff(x, y, n, spread) {
+  for (var i = 0; i < n; i++) {
+    var a = Math.random() * 6.283, sp = Math.random() * spread;
+    dust.push({ x: x + Math.cos(a) * 4, y: y + Math.sin(a) * 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 8, life: 1, r: .9 + Math.random() * 1.8 });
+  }
+  if (dust.length > 260) dust.splice(0, dust.length - 260);
+}
+function drawFx(dt, t) {
+  fctx.clearRect(0, 0, cssW, cssH);
+  var i, f, s;
+  for (i = flakes.length - 1; i >= 0; i--) {
+    f = flakes[i];
+    f.y += f.vy * dt * (f.tmp ? 2.4 : 1);
+    f.x += Math.sin(t / 1400 + f.ph) * f.sw * dt * .5;
+    if (f.y > cssH + 12) { if (f.tmp) { flakes.splice(i, 1); continue; } f.y = -10; f.x = Math.random() * cssW; }
+    s = f.r * 2.6;
+    fctx.globalAlpha = f.a;
+    fctx.drawImage(sprite, f.x - s / 2, f.y - s / 2, s, s);
+  }
+  for (i = dust.length - 1; i >= 0; i--) {
+    f = dust[i];
+    f.life -= dt * 1.5;
+    if (f.life <= 0) { dust.splice(i, 1); continue; }
+    f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= .96; f.vy = f.vy * .96 + 14 * dt;
+    s = f.r * 2.8;
+    fctx.globalAlpha = Math.min(1, f.life) * .9;
+    fctx.drawImage(sprite, f.x - s / 2, f.y - s / 2, s, s);
+  }
+  fctx.globalAlpha = 1;
+}
+
+/* ---------- input ---------- */
+var tool = 'brush', size = 'm', SIZES = { s: 6, m: 13, l: 26 };
+var drawing = false, last = null, speed = 0, lastT = 0, started = false;
+var hint = $('hint');
+
+function pos(e) { var r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height, cx: e.clientX - r.left, cy: e.clientY - r.top }; }
+
+cv.addEventListener('pointerdown', function (e) {
+  if (e.button > 0) return;
+  initAudio(); if (AC && AC.state === 'suspended') AC.resume();
+  if (!started) { started = true; hint.classList.add('gone'); }
+  var p = pos(e);
+  try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+  if (tool === 'brush') {
+    drawing = true; last = p; lastT = performance.now(); speed = 0;
+    dab(p.x, p.y, SIZES[size] * g); puff(p.cx, p.cy, 3, 26);
+  } else {
+    var ang = (Math.random() - .5) * .62;
+    if (tool === 'paw') stamp(PAW, p.x, p.y, 104 * g, ang);
+    else stamp(SNOWMAN, p.x, p.y, 112 * g, ang * .5);
+    puff(p.cx, p.cy, tool === 'paw' ? 14 : 20, 55);
+    thud(tool === 'paw' ? .7 : 1);
+  }
+  e.preventDefault();
+});
+cv.addEventListener('pointermove', function (e) {
+  if (!drawing) return;
+  var p = pos(e), r = SIZES[size] * g, dx = p.x - last.x, dy = p.y - last.y, dist = Math.sqrt(dx * dx + dy * dy);
+  var now = performance.now(), dtm = Math.max(1, now - lastT); lastT = now;
+  speed = speed * .6 + (dist / g / dtm) * .4;
+  var step = Math.max(1, r * .28), n = Math.max(1, Math.ceil(dist / step));
+  for (var i = 1; i <= n; i++) dab(last.x + dx * i / n, last.y + dy * i / n, r);
+  if (dist > 1) puff(p.cx, p.cy, 1 + (speed > .6 ? 1 : 0), 22);
+  last = p;
+});
+function endDraw() { drawing = false; }
+cv.addEventListener('pointerup', endDraw);
+cv.addEventListener('pointercancel', endDraw);
+cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+/* ---------- main loop ---------- */
+var resetting = false, resetT0 = 0, prev = 0;
+function setTheme(name) {
+  var th = THEMES[name]; if (!th) return;
+  themeAnim = { fb: curBase.slice(), fs: curShadow.slice(), tb: th.base, ts: th.shadow, t0: performance.now(), dur: 900 };
+  var root = document.documentElement.style;
+  root.setProperty('--bg', th.bg); root.setProperty('--ui-fg', th.ui);
+  root.setProperty('--ui-bg', th.uiBg); root.setProperty('--ui-on', th.on);
+}
+function doReset() {
+  if (resetting) return;
+  resetting = true; resetT0 = performance.now();
+  heavy = 260;
+  whoosh();
+}
+function frame(now) {
+  var dt = Math.min(.05, (now - prev) / 1000 || .016); prev = now;
+  if (themeAnim) {
+    var t = Math.min(1, (now - themeAnim.t0) / themeAnim.dur), e = t * t * (3 - 2 * t);
+    for (var i = 0; i < 3; i++) {
+      curBase[i] = themeAnim.fb[i] + (themeAnim.tb[i] - themeAnim.fb[i]) * e;
+      curShadow[i] = themeAnim.fs[i] + (themeAnim.ts[i] - themeAnim.fs[i]) * e;
+    }
+    fullDirty = true;
+    if (t >= 1) themeAnim = null;
+  }
+  if (resetting) {
+    var k = Math.exp(-dt / .42), mx = 0;
+    for (var j = 0; j < C.length; j++) {
+      C[j] *= k; R[j] *= k;
+      if (C[j] > mx) mx = C[j];
+    }
+    recompute(0, 0, W - 1, H - 1);
+    fullDirty = true;
+    var el = now - resetT0;
+    if (el < 1700) {
+      var spawn = Math.round(heavy * dt);
+      for (var q = 0; q < spawn; q++) { var fl = newFlake(true); fl.tmp = true; fl.r *= 1.2; fl.vy += 40; flakes.push(fl); }
+    }
+    if (el > 2300 && mx < .003) { C.fill(0); R.fill(0); recompute(0, 0, W - 1, H - 1); resetting = false; }
+    else if (el > 4000) { C.fill(0); R.fill(0); recompute(0, 0, W - 1, H - 1); resetting = false; }
+  }
+  if (fullDirty) { render(0, 0, W - 1, H - 1); fullDirty = false; dirty = null; }
+  else if (dirty) { render(dirty.x0, dirty.y0, dirty.x1, dirty.y1); dirty = null; }
+  drawFx(dt, now);
+  updateScratch(dt);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- audio (Web Audio, no files) ---------- */
+var AC = null, master, bus, noiseBuf, scratchGain, scratchFilt, muted = false;
+var nextChord = 0, nextNote = 0;
+var CHORDS = [
+  [130.81, 164.81, 196.0, 246.94],   // Cmaj7
+  [110.0, 130.81, 164.81, 196.0],    // Am7
+  [174.61, 220.0, 261.63, 329.63],   // Fmaj7
+  [98.0, 146.83, 196.0, 246.94]      // G6/9 flavour
+];
+var PENTA = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25];
+var chordIdx = 0, lastNote = 2;
+
+function initAudio() {
+  if (AC) return;
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; return; }
+  master = AC.createGain(); master.gain.value = muted ? 0 : .9; master.connect(AC.destination);
+  var len = Math.floor(AC.sampleRate * 3), ir = AC.createBuffer(2, len, AC.sampleRate);
+  for (var ch = 0; ch < 2; ch++) { var d = ir.getChannelData(ch); for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6); }
+  var conv = AC.createConvolver(); conv.buffer = ir;
+  var rev = AC.createGain(); rev.gain.value = .6; conv.connect(rev); rev.connect(master);
+  var dry = AC.createGain(); dry.gain.value = .7; dry.connect(master);
+  bus = AC.createGain(); bus.gain.value = .55; bus.connect(dry); bus.connect(conv);
+  noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  var nd = noiseBuf.getChannelData(0); for (var n = 0; n < nd.length; n++) nd[n] = Math.random() * 2 - 1;
+  var src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  scratchFilt = AC.createBiquadFilter(); scratchFilt.type = 'bandpass'; scratchFilt.frequency.value = 2800; scratchFilt.Q.value = .6;
+  scratchGain = AC.createGain(); scratchGain.gain.value = 0;
+  src.connect(scratchFilt); scratchFilt.connect(scratchGain); scratchGain.connect(master); src.start();
+  nextChord = AC.currentTime + .1; nextNote = AC.currentTime + 2.5;
+  schedule(); setInterval(schedule, 400);
+}
+
+function pad(freq, t, dur) {
+  for (var k = 0; k < 2; k++) {
+    var o = AC.createOscillator(), f = AC.createBiquadFilter(), a = AC.createGain();
+    o.type = k ? 'sine' : 'triangle'; o.frequency.value = freq; o.detune.value = (k ? 6 : -6);
+    f.type = 'lowpass'; f.frequency.value = 650; f.Q.value = .3;
+    a.gain.setValueAtTime(0, t); a.gain.linearRampToValueAtTime(.045, t + 3); a.gain.linearRampToValueAtTime(.03, t + dur - 1.5);
+    a.gain.linearRampToValueAtTime(0, t + dur + 2.5);
+    o.connect(f); f.connect(a); a.connect(bus);
+    o.start(t); o.stop(t + dur + 2.6);
+  }
+}
+function hum(freq, t) {
+  var o = AC.createOscillator(), lfo = AC.createOscillator(), lg = AC.createGain(), f = AC.createBiquadFilter(), a = AC.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  lfo.frequency.value = 4.6; lg.gain.value = freq * .006; lfo.connect(lg); lg.connect(o.frequency);
+  f.type = 'lowpass'; f.frequency.value = 1100;
+  a.gain.setValueAtTime(0, t); a.gain.linearRampToValueAtTime(.075, t + .45); a.gain.exponentialRampToValueAtTime(.0008, t + 2.6);
+  o.connect(f); f.connect(a); a.connect(bus);
+  o.start(t); lfo.start(t); o.stop(t + 2.7); lfo.stop(t + 2.7);
+}
+function schedule() {
+  if (!AC) return;
+  var now = AC.currentTime;
+  while (nextChord < now + 2) {
+    var ch = CHORDS[chordIdx % CHORDS.length]; chordIdx++;
+    for (var i = 0; i < ch.length; i++) pad(ch[i], nextChord, 8);
+    nextChord += 8;
+  }
+  while (nextNote < now + 2) {
+    if (Math.random() > .25) {
+      lastNote = Math.max(0, Math.min(PENTA.length - 1, lastNote + Math.round((Math.random() - .5) * 4)));
+      hum(PENTA[lastNote], nextNote);
+    }
+    nextNote += 1.7 + Math.random() * 2.2;
+  }
+}
+function thud(level) {
+  if (!AC) return;
+  var t = AC.currentTime;
+  var o = AC.createOscillator(), a = AC.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(125, t); o.frequency.exponentialRampToValueAtTime(52, t + .16);
+  a.gain.setValueAtTime(.0001, t); a.gain.exponentialRampToValueAtTime(.34 * level, t + .012); a.gain.exponentialRampToValueAtTime(.0001, t + .26);
+  o.connect(a); a.connect(master); o.start(t); o.stop(t + .3);
+  var s = AC.createBufferSource(), f = AC.createBiquadFilter(), b = AC.createGain();
+  s.buffer = noiseBuf; f.type = 'lowpass'; f.frequency.value = 520;
+  b.gain.setValueAtTime(.0001, t); b.gain.exponentialRampToValueAtTime(.2 * level, t + .01); b.gain.exponentialRampToValueAtTime(.0001, t + .2);
+  s.connect(f); f.connect(b); b.connect(master); s.start(t, Math.random()); s.stop(t + .25);
+}
+function whoosh() {
+  if (!AC) return;
+  var t = AC.currentTime, s = AC.createBufferSource(), f = AC.createBiquadFilter(), b = AC.createGain();
+  s.buffer = noiseBuf; f.type = 'bandpass'; f.Q.value = .5;
+  f.frequency.setValueAtTime(700, t); f.frequency.linearRampToValueAtTime(2400, t + 1.1); f.frequency.linearRampToValueAtTime(900, t + 2.2);
+  b.gain.setValueAtTime(.0001, t); b.gain.linearRampToValueAtTime(.18, t + .9); b.gain.linearRampToValueAtTime(.0001, t + 2.3);
+  s.connect(f); f.connect(b); b.connect(master); s.start(t, 0); s.stop(t + 2.4);
+}
+function updateScratch(dt) {
+  if (!AC || !scratchGain) return;
+  var now = AC.currentTime;
+  speed *= Math.pow(.02, dt);
+  var target = drawing ? Math.min(.3, speed * .16) : 0;
+  scratchGain.gain.setTargetAtTime(target, now, .05);
+  scratchFilt.frequency.setTargetAtTime(2200 + Math.min(3, speed) * 700, now, .08);
+}
+function setMuted(m) {
+  muted = m;
+  var b = $('bMute');
+  b.setAttribute('aria-pressed', m ? 'true' : 'false');
+  b.setAttribute('aria-label', m ? 'เปิดเสียง' : 'ปิดเสียง');
+  $('waves').style.display = m ? 'none' : '';
+  $('slash').style.display = m ? '' : 'none';
+  if (AC) master.gain.setTargetAtTime(m ? 0 : .9, AC.currentTime, .15);
+}
+
+/* ---------- toolbar ---------- */
+function pick(group, attr, val) {
+  var btns = $(group).querySelectorAll('.btn');
+  for (var i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', btns[i].getAttribute(attr) === val ? 'true' : 'false');
+}
+$('gTheme').addEventListener('click', function (e) {
+  var b = e.target.closest('.btn'); if (!b) return;
+  var n = b.getAttribute('data-theme'); pick('gTheme', 'data-theme', n); setTheme(n);
+});
+$('gTool').addEventListener('click', function (e) {
+  var b = e.target.closest('.btn'); if (!b) return;
+  tool = b.getAttribute('data-tool'); pick('gTool', 'data-tool', tool);
+  $('gSize').classList.toggle('dim', tool !== 'brush');
+});
+$('gSize').addEventListener('click', function (e) {
+  var b = e.target.closest('.btn'); if (!b) return;
+  size = b.getAttribute('data-size'); pick('gSize', 'data-size', size);
+  if (tool !== 'brush') { tool = 'brush'; pick('gTool', 'data-tool', 'brush'); $('gSize').classList.remove('dim'); }
+});
+$('bReset').addEventListener('click', doReset);
+$('bMute').addEventListener('click', function () { initAudio(); if (AC && AC.state === 'suspended') AC.resume(); setMuted(!muted); });
+
+window.addEventListener('resize', resize);
+resize();
+$('gSize').classList.toggle('dim', tool !== 'brush');
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
